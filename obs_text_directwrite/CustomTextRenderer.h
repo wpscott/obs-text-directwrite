@@ -1,6 +1,11 @@
+#pragma once
+
 #include <d2d1.h>
 #include <dwrite.h>
 #include <dwrite_2.h>
+#include <dwrite_3.h>
+
+#include <exception>
 
 template <class T>
 void SafeRelease(T** ppT) {
@@ -61,4 +66,8 @@ class CustomTextRenderer : public IDWriteTextRenderer {
   ID2D1RenderTarget* pRT;
   ID2D1Brush* pOutlineBrush = nullptr;
   ID2D1Brush* pFillBrush;
+
+  HRESULT DrawGlyphRun(const DWRITE_GLYPH_RUN* glyphRun,
+                       const FLOAT& baselineOriginX,
+                       const FLOAT& baselineOriginY, ID2D1Brush* brush);
 };

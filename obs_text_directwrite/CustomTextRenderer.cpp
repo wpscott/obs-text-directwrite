@@ -1,5 +1,7 @@
 #include "CustomTextRenderer.h"
 
+#include "obs_text_directwrite.h"
+
 CustomTextRenderer::CustomTextRenderer(ID2D1Factory* pD2DFactory_,
                                        ID2D1RenderTarget* pRT_,
                                        ID2D1Brush* pOutlineBrush_,
@@ -27,16 +29,12 @@ CustomTextRenderer::~CustomTextRenderer() {
   SafeRelease(&pFillBrush);
 }
 
-IFACEMETHODIMP CustomTextRenderer::DrawGlyphRun(
-    __maybenull void* clientDrawingContext, FLOAT baselineOriginX,
-    FLOAT baselineOriginY, DWRITE_MEASURING_MODE measuringMode,
-    __in DWRITE_GLYPH_RUN const* glyphRun,
-    __in DWRITE_GLYPH_RUN_DESCRIPTION const* glyphRunDescription,
-    IUnknown* clientDrawingEffect) {
-  HRESULT hr = S_OK;
-
+HRESULT CustomTextRenderer::DrawGlyphRun(const DWRITE_GLYPH_RUN* glyphRun,
+                                         const FLOAT& baselineOriginX,
+                                         const FLOAT& baselineOriginY,
+                                         ID2D1Brush* brush) {
   ID2D1PathGeometry* pPathGeometry = NULL;
-  hr = pD2DFactory->CreatePathGeometry(&pPathGeometry);
+  HRESULT hr = pD2DFactory->CreatePathGeometry(&pPathGeometry);
 
   ID2D1GeometrySink* pSink = NULL;
   if (SUCCEEDED(hr)) {
@@ -68,12 +66,60 @@ IFACEMETHODIMP CustomTextRenderer::DrawGlyphRun(
       pRT->DrawGeometry(pTransformedGeometry, pOutlineBrush, Outline_size);
     }
 
-    pRT->FillGeometry(pTransformedGeometry, pFillBrush);
+    pRT->FillGeometry(pTransformedGeometry, brush);
   }
 
   SafeRelease(&pPathGeometry);
   SafeRelease(&pSink);
   SafeRelease(&pTransformedGeometry);
+
+  return hr;
+}
+
+IFACEMETHODIMP CustomTextRenderer::DrawGlyphRun(
+    __maybenull void* clientDrawingContext, FLOAT baselineOriginX,
+    FLOAT baselineOriginY, DWRITE_MEASURING_MODE measuringMode,
+    __in DWRITE_GLYPH_RUN const* glyphRun,
+    __in DWRITE_GLYPH_RUN_DESCRIPTION const* glyphRunDescription,
+    IUnknown* clientDrawingEffect) {
+  HRESULT hr = S_OK;
+
+  const auto source = reinterpret_cast<TextSource*>(clientDrawingContext);
+
+  bool isColor = false;
+  IDWriteColorGlyphRunEnumerator1* colorLayer;
+
+  if (source &&
+      SUCCEEDED(source->pDWriteFactory->TranslateColorGlyphRun(
+          {0, 0}, glyphRun, glyphRunDescription,
+          DWRITE_GLYPH_IMAGE_FORMATS_TRUETYPE | DWRITE_GLYPH_IMAGE_FORMATS_CFF |
+              DWRITE_GLYPH_IMAGE_FORMATS_COLR,
+          measuringMode, nullptr, 0, &colorLayer))) {
+    isColor = true;
+  }
+
+  if (isColor) {
+    BOOL hasRun;
+    const DWRITE_COLOR_GLYPH_RUN1* colorRun;
+    ID2D1SolidColorBrush* temp_brush;
+    pRT->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), &temp_brush);
+    while (SUCCEEDED(colorLayer->MoveNext(&hasRun)) && hasRun) {
+      if (FAILED(colorLayer->GetCurrentRun(&colorRun))) {
+        break;
+      }
+      ID2D1Brush* brush = pFillBrush;
+      if (colorRun->paletteIndex != 0xFFFF) {
+        temp_brush->SetColor(colorRun->runColor);
+        brush = temp_brush;
+      }
+      hr = DrawGlyphRun(&colorRun->glyphRun,
+                        baselineOriginX + colorRun->baselineOriginX,
+                        baselineOriginY + colorRun->baselineOriginY, brush);
+    }
+    SafeRelease(&temp_brush);
+  } else {
+    hr = DrawGlyphRun(glyphRun, baselineOriginX, baselineOriginY, pFillBrush);
+  }
 
   return hr;
 }

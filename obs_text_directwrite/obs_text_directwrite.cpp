@@ -1,37 +1,5 @@
 #include "obs_text_directwrite.h"
 
-void TextSource::UpdateFont() {
-  SafeRelease(&pTextFormat);
-  if (bold) {
-    weight = DWRITE_FONT_WEIGHT::DWRITE_FONT_WEIGHT_BOLD;
-  } else {
-    weight = DWRITE_FONT_WEIGHT::DWRITE_FONT_WEIGHT_REGULAR;
-  }
-
-  if (italic) {
-    style = DWRITE_FONT_STYLE::DWRITE_FONT_STYLE_ITALIC;
-  } else {
-    style = DWRITE_FONT_STYLE::DWRITE_FONT_STYLE_NORMAL;
-  }
-  if (pDWriteFactory) {
-    HRESULT hr = pDWriteFactory->CreateTextFormat(
-        face.c_str(), NULL, weight, style, stretch, (float)face_size, L"en-us",
-        &pTextFormat);
-
-    if (SUCCEEDED(hr)) {
-      pTextFormat->SetTextAlignment(align);
-      pTextFormat->SetParagraphAlignment(valign);
-      pTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
-
-      /*if (vertical)
-      {
-      pTextFormat->SetReadingDirection(DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
-      pTextFormat->SetFlowDirection(DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT);
-      }*/
-    }
-  }
-}
-
 void TextSource::CalculateGradientAxis(float width, float height) {
   if (width <= 0.f || height <= 0.f) return;
 
@@ -69,16 +37,10 @@ void TextSource::InitializeDirectWrite() {
   HRESULT hr =
       D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &pD2DFactory);
 
-  IDWriteFactory *factory;
   if (SUCCEEDED(hr)) {
     hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
-                             __uuidof(IDWriteFactory),
-                             reinterpret_cast<IUnknown **>(&factory));
-  }
-  if (SUCCEEDED(hr)) {
-    hr = factory->QueryInterface(
-        reinterpret_cast<IDWriteFactory4 **>(&pDWriteFactory));
-    SafeRelease(&factory);
+                             __uuidof(IDWriteFactory7),
+                             reinterpret_cast<IUnknown **>(&pDWriteFactory));
   }
 
   props = D2D1::RenderTargetProperties(
@@ -90,11 +52,6 @@ void TextSource::InitializeDirectWrite() {
 }
 
 void TextSource::ReleaseResource() {
-  SafeRelease(&pTextRenderer);
-  SafeRelease(&pRT);
-  SafeRelease(&pFillBrush);
-  SafeRelease(&pOutlineBrush);
-  SafeRelease(&pTextLayout);
   SafeRelease(&pTextFormat);
   SafeRelease(&pDWriteFactory);
   SafeRelease(&pD2DFactory);
@@ -158,9 +115,18 @@ void TextSource::RenderText() {
   SIZE size;
   UINT32 lines = 1;
 
-  HRESULT hr =
-      pDWriteFactory->CreateTextLayout(text.c_str(), TextLength, pTextFormat,
-                                       layout_cx, layout_cy, &pTextLayout);
+  IDWriteTextLayout *layout = nullptr;
+  ID2D1Brush *pFillBrush = nullptr;
+  ID2D1Brush *pOutlineBrush = nullptr;
+  ID2D1DCRenderTarget *pRT = nullptr;
+  IDWriteTextLayout4 *pTextLayout = nullptr;
+
+  HRESULT hr = pDWriteFactory->CreateTextLayout(
+      text.c_str(), TextLength, pTextFormat, layout_cx, layout_cy, &layout);
+  if (SUCCEEDED(hr)) {
+    hr = layout->QueryInterface<IDWriteTextLayout4>(&pTextLayout);
+    SafeRelease(&layout);
+  }
 
   if (SUCCEEDED(hr)) {
     DWRITE_TEXT_METRICS textMetrics;
@@ -188,6 +154,11 @@ void TextSource::RenderText() {
     pTextLayout->SetStrikethrough(strikeout, text_range);
     pTextLayout->SetMaxWidth(layout_cx);
     pTextLayout->SetMaxHeight(layout_cy);
+    if (vertical) {
+      pTextLayout->SetReadingDirection(DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
+      pTextLayout->SetFlowDirection(DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT);
+    }
+
     hr = pD2DFactory->CreateDCRenderTarget(&props, &pRT);
   }
 
@@ -207,9 +178,10 @@ void TextSource::RenderText() {
 
       UpdateBrush(pRT, &pOutlineBrush, &pFillBrush, text_cx, text_cy / lines);
 
-      pTextRenderer = new CustomTextRenderer(
-          pD2DFactory, (ID2D1RenderTarget *)pRT, (ID2D1Brush *)pOutlineBrush,
-          (ID2D1Brush *)pFillBrush, outline_size);
+      const auto &pTextRenderer = new CustomTextRenderer(
+          pD2DFactory, pDWriteFactory, (ID2D1RenderTarget *)pRT,
+          (ID2D1Brush *)pOutlineBrush, (ID2D1Brush *)pFillBrush, outline_size,
+          vertical);
       if (pTextRenderer) {
         pRT->BeginDraw();
 
@@ -217,7 +189,7 @@ void TextSource::RenderText() {
 
         pRT->Clear(D2D1::ColorF(bk_color, bk_opacity / 100.f));
 
-        pTextLayout->Draw(this, pTextRenderer, 0.f, 0.f);
+        hr = pTextLayout->Draw(nullptr, pTextRenderer, 0.f, 0.f);
 
         hr = pRT->EndDraw();
       }
@@ -232,7 +204,6 @@ void TextSource::RenderText() {
   SafeRelease(&pFillBrush);
   SafeRelease(&pOutlineBrush);
   SafeRelease(&pTextLayout);
-  SafeRelease(&pTextRenderer);
   SafeRelease(&pRT);
 }
 
@@ -262,6 +233,36 @@ void TextSource::LoadFileText() {
   text = to_wide(GetMainString(file_text));
 }
 
+void TextSource::UpdateFont() {
+  SafeRelease(&pTextFormat);
+
+  if (pDWriteFactory) {
+    IDWriteTextFormat *format;
+    HRESULT hr = pDWriteFactory->CreateTextFormat(
+        face.c_str(), NULL,
+        bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
+        italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL, (float)face_size, L"en-us", &format);
+    if (SUCCEEDED(hr)) {
+      hr = format->QueryInterface<IDWriteTextFormat3>(&pTextFormat);
+      SafeRelease(&format);
+    }
+
+    if (SUCCEEDED(hr)) {
+      pTextFormat->SetTextAlignment(align);
+      pTextFormat->SetParagraphAlignment(valign);
+      pTextFormat->SetWordWrapping(wrap ? DWRITE_WORD_WRAPPING_WRAP
+                                        : DWRITE_WORD_WRAPPING_NO_WRAP);
+
+      if (vertical) {
+        pTextFormat->SetReadingDirection(
+            DWRITE_READING_DIRECTION_TOP_TO_BOTTOM);
+        pTextFormat->SetFlowDirection(DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT);
+      }
+    }
+  }
+}
+
 #define obs_data_get_uint32 (uint32_t) obs_data_get_int
 
 inline void TextSource::Update(obs_data_t *s) {
@@ -277,7 +278,7 @@ inline void TextSource::Update(obs_data_t *s) {
   uint32_t new_color4 = obs_data_get_uint32(s, S_GRADIENT_COLOR3);
   uint32_t new_opacity2 = obs_data_get_uint32(s, S_GRADIENT_OPACITY);
   float new_grad_dir = (float)obs_data_get_double(s, S_GRADIENT_DIR);
-  // bool new_vertical = obs_data_get_bool(s, S_VERTICAL);
+  bool new_vertical = obs_data_get_bool(s, S_VERTICAL);
   bool new_outline = obs_data_get_bool(s, S_OUTLINE);
   uint32_t new_o_color = obs_data_get_uint32(s, S_OUTLINE_COLOR);
   uint32_t new_o_opacity = obs_data_get_uint32(s, S_OUTLINE_OPACITY);
@@ -287,6 +288,7 @@ inline void TextSource::Update(obs_data_t *s) {
   bool new_chat_mode = obs_data_get_bool(s, S_CHATLOG_MODE);
   int new_chat_lines = (int)obs_data_get_int(s, S_CHATLOG_LINES);
   bool new_extents = obs_data_get_bool(s, S_EXTENTS);
+  bool new_extends_wrap = obs_data_get_bool(s, S_EXTENTS_WRAP);
   uint32_t n_extents_cx = obs_data_get_uint32(s, S_EXTENTS_CX);
   uint32_t n_extents_cy = obs_data_get_uint32(s, S_EXTENTS_CY);
 
@@ -303,17 +305,62 @@ inline void TextSource::Update(obs_data_t *s) {
 
   /* ----------------------------- */
 
+  wrap = new_extends_wrap;
+
+  if (strcmp(align_str, S_ALIGN_CENTER) == 0) {
+    if (vertical) {
+      valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
+    } else {
+      align = DWRITE_TEXT_ALIGNMENT_CENTER;
+    }
+  } else if (strcmp(align_str, S_ALIGN_RIGHT) == 0) {
+    if (vertical) {
+      valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+    } else {
+      align = DWRITE_TEXT_ALIGNMENT_TRAILING;
+    }
+  } else {
+    if (vertical) {
+      valign = DWRITE_PARAGRAPH_ALIGNMENT_FAR;
+    } else {
+      align = DWRITE_TEXT_ALIGNMENT_LEADING;
+    }
+  }
+
+  if (strcmp(valign_str, S_VALIGN_CENTER) == 0) {
+    valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
+    if (vertical) {
+      align = DWRITE_TEXT_ALIGNMENT_CENTER;
+    } else {
+      valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
+    }
+  } else if (strcmp(valign_str, S_VALIGN_BOTTOM) == 0) {
+    if (vertical) {
+      align = DWRITE_TEXT_ALIGNMENT_TRAILING;
+    } else {
+      valign = DWRITE_PARAGRAPH_ALIGNMENT_FAR;
+    }
+  } else {
+    if (vertical) {
+      align = DWRITE_TEXT_ALIGNMENT_LEADING;
+    } else {
+      valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+    }
+  }
+
   wstring new_face = to_wide(font_face);
 
   if (new_face != face || face_size != font_size || new_bold != bold ||
       new_italic != italic || new_underline != underline ||
-      new_strikeout != strikeout) {
+      new_strikeout != strikeout || vertical != new_vertical) {
     face = new_face;
     face_size = font_size;
     bold = new_bold;
     italic = new_italic;
     underline = new_underline;
     strikeout = new_strikeout;
+
+    vertical = new_vertical;
 
     UpdateFont();
   }
@@ -334,7 +381,6 @@ inline void TextSource::Update(obs_data_t *s) {
   color4 = new_color4;
   opacity2 = new_opacity2;
   gradient_dir = new_grad_dir;
-  // vertical = new_vertical;
 
   if (strcmp(gradient_str, S_GRADIENT_NONE) == 0) {
     gradient_count = 0;
@@ -369,22 +415,6 @@ inline void TextSource::Update(obs_data_t *s) {
   outline_color = new_o_color;
   outline_opacity = new_o_opacity;
   outline_size = roundf(float(new_o_size));
-
-  if (strcmp(align_str, S_ALIGN_CENTER) == 0) {
-    align = DWRITE_TEXT_ALIGNMENT_CENTER;
-  } else if (strcmp(align_str, S_ALIGN_RIGHT) == 0) {
-    align = DWRITE_TEXT_ALIGNMENT_TRAILING;
-  } else {
-    align = DWRITE_TEXT_ALIGNMENT_LEADING;
-  }
-
-  if (strcmp(valign_str, S_VALIGN_CENTER) == 0) {
-    valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
-  } else if (strcmp(valign_str, S_VALIGN_BOTTOM) == 0) {
-    valign = DWRITE_PARAGRAPH_ALIGNMENT_FAR;
-  } else {
-    valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
-  }
 
   RenderText();
   update_time_elapsed = 0.0f;
@@ -496,6 +526,7 @@ static bool extents_modified(obs_properties_t *props, obs_property_t *p,
 
   set_vis(use_extents, S_EXTENTS_CX, true);
   set_vis(use_extents, S_EXTENTS_CY, true);
+  set_vis(use_extents, S_EXTENTS_WRAP, true);
   return true;
 }
 
@@ -532,7 +563,7 @@ static obs_properties_t *get_properties(void *data) {
   obs_properties_add_path(props, S_FILE, T_FILE, OBS_PATH_FILE, filter.c_str(),
                           path.c_str());
 
-  // obs_properties_add_bool(props, S_VERTICAL, T_VERTICAL);
+  obs_properties_add_bool(props, S_VERTICAL, T_VERTICAL);
   obs_properties_add_color(props, S_COLOR, T_COLOR);
   p = obs_properties_add_int_slider(props, S_OPACITY, T_OPACITY, 0, 100, 1);
   obs_property_int_set_suffix(p, "%");
@@ -594,6 +625,7 @@ static obs_properties_t *get_properties(void *data) {
 
   obs_properties_add_int(props, S_EXTENTS_CX, T_EXTENTS_CX, 32, 8000, 1);
   obs_properties_add_int(props, S_EXTENTS_CY, T_EXTENTS_CY, 32, 8000, 1);
+  obs_properties_add_bool(props, S_EXTENTS_WRAP, T_EXTENTS_WRAP);
 
   return props;
 }
@@ -638,6 +670,7 @@ bool obs_module_load(void) {
     obs_data_set_default_int(settings, S_OUTLINE_COLOR, 0xFFFFFF);
     obs_data_set_default_int(settings, S_OUTLINE_OPACITY, 100);
     obs_data_set_default_int(settings, S_CHATLOG_LINES, 6);
+    obs_data_set_default_bool(settings, S_EXTENTS_WRAP, true);
     obs_data_set_default_int(settings, S_EXTENTS_CX, 100);
     obs_data_set_default_int(settings, S_EXTENTS_CY, 100);
 

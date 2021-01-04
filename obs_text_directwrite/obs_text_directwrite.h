@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 
 #include <math.h>
 #include <obs-module.h>
@@ -50,7 +51,7 @@ constexpr auto S_VALIGN = "valign";
 constexpr auto S_OPACITY = "opacity";
 constexpr auto S_BKCOLOR = "bk_color";
 constexpr auto S_BKOPACITY = "bk_opacity";
-//#define S_VERTICAL                      "vertical"
+constexpr auto S_VERTICAL = "vertical";
 constexpr auto S_OUTLINE = "outline";
 constexpr auto S_OUTLINE_SIZE = "outline_size";
 constexpr auto S_OUTLINE_COLOR = "outline_color";
@@ -58,6 +59,7 @@ constexpr auto S_OUTLINE_OPACITY = "outline_opacity";
 constexpr auto S_CHATLOG_MODE = "chatlog";
 constexpr auto S_CHATLOG_LINES = "chatlog_lines";
 constexpr auto S_EXTENTS = "extents";
+constexpr auto S_EXTENTS_WRAP = "extents_wrap";
 constexpr auto S_EXTENTS_CX = "extents_cx";
 constexpr auto S_EXTENTS_CY = "extents_cy";
 
@@ -90,7 +92,7 @@ constexpr auto S_VALIGN_BOTTOM = "bottom";
 #define T_OPACITY T_("Opacity")
 #define T_BKCOLOR T_("BkColor")
 #define T_BKOPACITY T_("BkOpacity")
-//#define T_VERTICAL                      T_("Vertical")
+#define T_VERTICAL T_("Vertical")
 #define T_OUTLINE T_("Outline")
 #define T_OUTLINE_SIZE T_("Outline.Size")
 #define T_OUTLINE_COLOR T_("Outline.Color")
@@ -98,6 +100,7 @@ constexpr auto S_VALIGN_BOTTOM = "bottom";
 #define T_CHATLOG_MODE T_("ChatlogMode")
 #define T_CHATLOG_LINES T_("ChatlogMode.Lines")
 #define T_EXTENTS T_("UseCustomExtents")
+#define T_EXTENTS_WRAP T_("UseCustomExtents.Wrap")
 #define T_EXTENTS_CX T_("Width")
 #define T_EXTENTS_CY T_("Height")
 
@@ -135,14 +138,9 @@ struct TextSource {
   uint32_t cx = 0;
   uint32_t cy = 0;
 
-  IDWriteFactory4 *pDWriteFactory = nullptr;
-  IDWriteTextFormat *pTextFormat = nullptr;
-  ID2D1Factory *pD2DFactory = nullptr;
-  ID2D1Brush *pFillBrush = nullptr;
-  ID2D1Brush *pOutlineBrush = nullptr;
-  ID2D1DCRenderTarget *pRT = nullptr;
-  IDWriteTextLayout *pTextLayout = nullptr;
-  CustomTextRenderer *pTextRenderer = nullptr;
+  IDWriteFactory7 *pDWriteFactory = nullptr;
+  IDWriteTextFormat3 *pTextFormat = nullptr;
+  ID2D1Factory7 *pD2DFactory = nullptr;
 
   D2D1_RENDER_TARGET_PROPERTIES props = {};
 
@@ -173,9 +171,6 @@ struct TextSource {
   uint32_t bk_color = 0;
   uint32_t bk_opacity = 0;
 
-  DWRITE_FONT_WEIGHT weight = DWRITE_FONT_WEIGHT_REGULAR;
-  DWRITE_FONT_STYLE style = DWRITE_FONT_STYLE_NORMAL;
-  DWRITE_FONT_STRETCH stretch = DWRITE_FONT_STRETCH_NORMAL;
   DWRITE_TEXT_ALIGNMENT align = DWRITE_TEXT_ALIGNMENT_LEADING;
   DWRITE_PARAGRAPH_ALIGNMENT valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
 
@@ -183,7 +178,7 @@ struct TextSource {
   bool italic = false;
   bool underline = false;
   bool strikeout = false;
-  // bool vertical = false;
+  bool vertical = false;
 
   bool use_outline = false;
   float outline_size = 0.f;
@@ -191,6 +186,7 @@ struct TextSource {
   uint32_t outline_opacity = 100;
 
   bool use_extents = false;
+  bool wrap = true;
   uint32_t extents_cx = 0;
   uint32_t extents_cy = 0;
 

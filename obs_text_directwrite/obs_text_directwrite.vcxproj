@@ -177,9 +177,6 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <Text Include="ReadMe.txt" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="CustomTextRenderer.cpp" />
     <ClCompile Include="obs_text_directwrite.cpp" />
   </ItemGroup>

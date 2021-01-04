@@ -39,7 +39,7 @@ CustomTextRenderer::~CustomTextRenderer() {
 }
 
 HRESULT CustomTextRenderer::DrawGlyphRun(const DWRITE_GLYPH_RUN* glyphRun,
-                                         const D2D1::Matrix3x2F* matrix,
+                                         const D2D1::Matrix3x2F& matrix,
                                          ID2D1Brush* brush) {
   ID2D1PathGeometry* pPathGeometry = nullptr;
   HRESULT hr = pD2DFactory->CreatePathGeometry(&pPathGeometry);
@@ -125,27 +125,29 @@ IFACEMETHODIMP CustomTextRenderer::DrawGlyphRun(
         temp_brush->SetColor(colorRun->runColor);
         brush = temp_brush;
       }
-      D2D1::Matrix3x2F const origin =
+      const D2D1::Matrix3x2F origin =
           D2D1::Matrix3x2F(1.f, 0.f, 0.f, 1.f, colorRun->baselineOriginX,
                            colorRun->baselineOriginY);
-      DWRITE_MATRIX matrix{};
-      pAnalyzer->GetGlyphOrientationTransform(
-          orientationAngle, colorRun->glyphRun.isSideways, &matrix);
+
+      D2D1::Matrix3x2F matrix{};
+      pAnalyzer->GetGlyphOrientationTransform(orientationAngle,
+                                              colorRun->glyphRun.isSideways,
+                                              (DWRITE_MATRIX*)&matrix);
       matrix.dx = baselineOriginX;
       matrix.dy = baselineOriginY;
 
-      const auto& result = origin * (*(D2D1::Matrix3x2F*)&matrix);
+      const auto& result = origin * matrix;
 
-      hr = DrawGlyphRun(&colorRun->glyphRun, &result, brush);
+      hr = DrawGlyphRun(&colorRun->glyphRun, result, brush);
     }
     SafeRelease(&temp_brush);
   } else {
-    DWRITE_MATRIX matrix{};
-    pAnalyzer->GetGlyphOrientationTransform(orientationAngle,
-                                            glyphRun->isSideways, &matrix);
+    D2D1::Matrix3x2F matrix{};
+    pAnalyzer->GetGlyphOrientationTransform(
+        orientationAngle, glyphRun->isSideways, (DWRITE_MATRIX*)&matrix);
     matrix.dx = baselineOriginX;
     matrix.dy = baselineOriginY;
-    hr = DrawGlyphRun(glyphRun, (D2D1::Matrix3x2F*)&matrix, pFillBrush);
+    hr = DrawGlyphRun(glyphRun, matrix, pFillBrush);
   }
 
   return hr;
@@ -172,7 +174,7 @@ IFACEMETHODIMP CustomTextRenderer::DrawUnderline(
 
   HRESULT hr = pD2DFactory->CreateRectangleGeometry(&rect, &pRectangleGeometry);
 
-  D2D1::Matrix3x2F const matrix =
+  const D2D1::Matrix3x2F matrix =
       D2D1::Matrix3x2F(1.f, 0.f, 0.f, 1.f, baselineOriginX, baselineOriginY);
   const auto& result = matrix * rotations[orientationAngle];
 
@@ -215,7 +217,7 @@ IFACEMETHODIMP CustomTextRenderer::DrawStrikethrough(
   ID2D1RectangleGeometry* pRectangleGeometry = nullptr;
   HRESULT hr = pD2DFactory->CreateRectangleGeometry(&rect, &pRectangleGeometry);
 
-  D2D1::Matrix3x2F const matrix =
+  const D2D1::Matrix3x2F matrix =
       D2D1::Matrix3x2F(1.f, 0.f, 0.f, 1.f, baselineOriginX, baselineOriginY);
   const auto& result = matrix * rotations[orientationAngle];
 

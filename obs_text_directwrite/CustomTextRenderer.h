@@ -106,5 +106,5 @@ class CustomTextRenderer : public IDWriteTextRenderer1 {
       D2D1::Matrix3x2F::Rotation(180.f), D2D1::Matrix3x2F::Rotation(270.f)};
 
   HRESULT DrawGlyphRun(const DWRITE_GLYPH_RUN* glyphRun,
-                       const D2D1::Matrix3x2F* matrix, ID2D1Brush* brush);
+                       const D2D1::Matrix3x2F& matrix, ID2D1Brush* brush);
 };

@@ -1,7 +1,5 @@
 #include "CustomTextRenderer.h"
 
-#include "obs_text_directwrite.h"
-
 CustomTextRenderer::CustomTextRenderer(
     ID2D1Factory7* pD2DFactory_, IDWriteFactory7* pDWriteFactory_,
     ID2D1RenderTarget* pRT_, ID2D1Brush* pOutlineBrush_,
@@ -136,9 +134,7 @@ IFACEMETHODIMP CustomTextRenderer::DrawGlyphRun(
       matrix.dx = baselineOriginX;
       matrix.dy = baselineOriginY;
 
-      const auto& result = origin * matrix;
-
-      hr = DrawGlyphRun(&colorRun->glyphRun, result, brush);
+      hr = DrawGlyphRun(&colorRun->glyphRun, origin * matrix, brush);
     }
     SafeRelease(&temp_brush);
   } else {

@@ -1,7 +1,7 @@
 #include "CustomTextRenderer.h"
 
 CustomTextRenderer::CustomTextRenderer(
-    ID2D1Factory7* pD2DFactory_, IDWriteFactory7* pDWriteFactory_,
+    ID2D1Factory* pD2DFactory_, IDWriteFactory4* pDWriteFactory_,
     ID2D1RenderTarget* pRT_, ID2D1Brush* pOutlineBrush_,
     ID2D1Brush* pFillBrush_, const float& Outline_size_, const bool& vertical_)
     : cRefCount_(0),
@@ -38,7 +38,7 @@ CustomTextRenderer::~CustomTextRenderer() {
 
 HRESULT CustomTextRenderer::DrawGlyphRun(const DWRITE_GLYPH_RUN* glyphRun,
                                          const D2D1::Matrix3x2F& matrix,
-                                         ID2D1Brush* brush) {
+                                         ID2D1Brush* fillBrush, ID2D1Brush* outlineBrush) {
   ID2D1PathGeometry* pPathGeometry = nullptr;
   HRESULT hr = pD2DFactory->CreatePathGeometry(&pPathGeometry);
 
@@ -65,16 +65,17 @@ HRESULT CustomTextRenderer::DrawGlyphRun(const DWRITE_GLYPH_RUN* glyphRun,
   }
 
   if (SUCCEEDED(hr)) {
-    if (pOutlineBrush) {
-      pRT->DrawGeometry(pTransformedGeometry, pOutlineBrush, Outline_size);
+    if (outlineBrush) {
+      pRT->DrawGeometry(pTransformedGeometry, outlineBrush, Outline_size);
     }
 
-    pRT->FillGeometry(pTransformedGeometry, brush);
+    pRT->FillGeometry(pTransformedGeometry, fillBrush);
   }
 
   SafeRelease(&pPathGeometry);
   SafeRelease(&pSink);
   SafeRelease(&pTransformedGeometry);
+
   return hr;
 }
 
@@ -134,7 +135,7 @@ IFACEMETHODIMP CustomTextRenderer::DrawGlyphRun(
       matrix.dx = baselineOriginX;
       matrix.dy = baselineOriginY;
 
-      hr = DrawGlyphRun(&colorRun->glyphRun, origin * matrix, brush);
+      hr = DrawGlyphRun(&colorRun->glyphRun, origin * matrix, brush, nullptr);
     }
     SafeRelease(&temp_brush);
   } else {
@@ -143,7 +144,7 @@ IFACEMETHODIMP CustomTextRenderer::DrawGlyphRun(
         orientationAngle, glyphRun->isSideways, (DWRITE_MATRIX*)&matrix);
     matrix.dx = baselineOriginX;
     matrix.dy = baselineOriginY;
-    hr = DrawGlyphRun(glyphRun, matrix, pFillBrush);
+    hr = DrawGlyphRun(glyphRun, matrix, pFillBrush, pOutlineBrush);
   }
 
   return hr;

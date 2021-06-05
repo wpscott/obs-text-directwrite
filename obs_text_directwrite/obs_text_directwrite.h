@@ -138,9 +138,9 @@ struct TextSource {
   uint32_t cx = 0;
   uint32_t cy = 0;
 
-  IDWriteFactory7 *pDWriteFactory = nullptr;
-  IDWriteTextFormat3 *pTextFormat = nullptr;
-  ID2D1Factory7 *pD2DFactory = nullptr;
+  IDWriteFactory4 *pDWriteFactory = nullptr;
+  IDWriteTextFormat *pTextFormat = nullptr;
+  ID2D1Factory *pD2DFactory = nullptr;
 
   D2D1_RENDER_TARGET_PROPERTIES props = {};
 

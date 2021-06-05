@@ -22,8 +22,8 @@ void SafeRelease(T** ppT) {
 
 class CustomTextRenderer : public IDWriteTextRenderer1 {
  public:
-  CustomTextRenderer(ID2D1Factory7* pD2DFactory,
-                     IDWriteFactory7* pDWriteFactory, ID2D1RenderTarget* pRT,
+  CustomTextRenderer(ID2D1Factory* pD2DFactory,
+                     IDWriteFactory4* pDWriteFactory, ID2D1RenderTarget* pRT,
                      ID2D1Brush* pOutlineBrush, ID2D1Brush* pFillBrush,
                      const float& Outline_size_, const bool& vertical_);
 
@@ -94,8 +94,8 @@ class CustomTextRenderer : public IDWriteTextRenderer1 {
   unsigned long cRefCount_;
   float Outline_size;
   bool vertical;
-  ID2D1Factory7* pD2DFactory;
-  IDWriteFactory7* pDWriteFactory;
+  ID2D1Factory* pD2DFactory;
+  IDWriteFactory4* pDWriteFactory;
   IDWriteTextAnalyzer2* pAnalyzer;
   ID2D1RenderTarget* pRT;
   ID2D1Brush* pOutlineBrush = nullptr;
@@ -106,5 +106,5 @@ class CustomTextRenderer : public IDWriteTextRenderer1 {
       D2D1::Matrix3x2F::Rotation(180.f), D2D1::Matrix3x2F::Rotation(270.f)};
 
   HRESULT DrawGlyphRun(const DWRITE_GLYPH_RUN* glyphRun,
-                       const D2D1::Matrix3x2F& matrix, ID2D1Brush* brush);
+                       const D2D1::Matrix3x2F& matrix, ID2D1Brush* fillBrush, ID2D1Brush* outlineBrush);
 };

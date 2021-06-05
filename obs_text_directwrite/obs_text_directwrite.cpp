@@ -39,7 +39,7 @@ void TextSource::InitializeDirectWrite() {
 
   if (SUCCEEDED(hr)) {
     hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED,
-                             __uuidof(IDWriteFactory7),
+                             __uuidof(IDWriteFactory4),
                              reinterpret_cast<IUnknown **>(&pDWriteFactory));
   }
 
@@ -115,19 +115,14 @@ void TextSource::RenderText() {
   SIZE size;
   UINT32 lines = 1;
 
-  IDWriteTextLayout *layout = nullptr;
+  IDWriteTextLayout *pTextLayout = nullptr;
   ID2D1Brush *pFillBrush = nullptr;
   ID2D1Brush *pOutlineBrush = nullptr;
   ID2D1DCRenderTarget *pRT = nullptr;
-  IDWriteTextLayout4 *pTextLayout = nullptr;
 
-  HRESULT hr = pDWriteFactory->CreateTextLayout(
-      text.c_str(), TextLength, pTextFormat, layout_cx, layout_cy, &layout);
-  if (SUCCEEDED(hr)) {
-    hr = layout->QueryInterface<IDWriteTextLayout4>(&pTextLayout);
-    SafeRelease(&layout);
-  }
-
+  HRESULT hr =
+      pDWriteFactory->CreateTextLayout(text.c_str(), TextLength, pTextFormat,
+                                       layout_cx, layout_cy, &pTextLayout);
   if (SUCCEEDED(hr)) {
     DWRITE_TEXT_METRICS textMetrics;
     hr = pTextLayout->GetMetrics(&textMetrics);
@@ -147,7 +142,6 @@ void TextSource::RenderText() {
     size.cx = layout_cx;
     size.cy = layout_cy;
   }
-
   if (SUCCEEDED(hr)) {
     DWRITE_TEXT_RANGE text_range = {0, TextLength};
     pTextLayout->SetUnderline(underline, text_range);
@@ -161,7 +155,6 @@ void TextSource::RenderText() {
 
     hr = pD2DFactory->CreateDCRenderTarget(&props, &pRT);
   }
-
   if (SUCCEEDED(hr)) {
     obs_enter_graphics();
     RECT rc;
@@ -237,16 +230,11 @@ void TextSource::UpdateFont() {
   SafeRelease(&pTextFormat);
 
   if (pDWriteFactory) {
-    IDWriteTextFormat *format;
     HRESULT hr = pDWriteFactory->CreateTextFormat(
         face.c_str(), NULL,
         bold ? DWRITE_FONT_WEIGHT_BOLD : DWRITE_FONT_WEIGHT_REGULAR,
         italic ? DWRITE_FONT_STYLE_ITALIC : DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL, (float)face_size, L"en-us", &format);
-    if (SUCCEEDED(hr)) {
-      hr = format->QueryInterface<IDWriteTextFormat3>(&pTextFormat);
-      SafeRelease(&format);
-    }
+        DWRITE_FONT_STRETCH_NORMAL, (float)face_size, L"zh-CN", &pTextFormat);
 
     if (SUCCEEDED(hr)) {
       pTextFormat->SetTextAlignment(align);
@@ -305,54 +293,56 @@ inline void TextSource::Update(obs_data_t *s) {
 
   /* ----------------------------- */
 
-  wrap = new_extends_wrap;
+  DWRITE_TEXT_ALIGNMENT new_align = align;
+  DWRITE_PARAGRAPH_ALIGNMENT new_valign = valign;
 
   if (strcmp(align_str, S_ALIGN_CENTER) == 0) {
-    if (vertical) {
-      valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
+    if (new_vertical) {
+      new_valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
     } else {
-      align = DWRITE_TEXT_ALIGNMENT_CENTER;
+      new_align = DWRITE_TEXT_ALIGNMENT_CENTER;
     }
   } else if (strcmp(align_str, S_ALIGN_RIGHT) == 0) {
-    if (vertical) {
-      valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+    if (new_vertical) {
+      new_valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
     } else {
-      align = DWRITE_TEXT_ALIGNMENT_TRAILING;
+      new_align = DWRITE_TEXT_ALIGNMENT_TRAILING;
     }
   } else {
-    if (vertical) {
-      valign = DWRITE_PARAGRAPH_ALIGNMENT_FAR;
+    if (new_vertical) {
+      new_valign = DWRITE_PARAGRAPH_ALIGNMENT_FAR;
     } else {
-      align = DWRITE_TEXT_ALIGNMENT_LEADING;
+      new_align = DWRITE_TEXT_ALIGNMENT_LEADING;
     }
   }
 
   if (strcmp(valign_str, S_VALIGN_CENTER) == 0) {
-    valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
-    if (vertical) {
-      align = DWRITE_TEXT_ALIGNMENT_CENTER;
+    if (new_vertical) {
+      new_align = DWRITE_TEXT_ALIGNMENT_CENTER;
     } else {
-      valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
+      new_valign = DWRITE_PARAGRAPH_ALIGNMENT_CENTER;
     }
   } else if (strcmp(valign_str, S_VALIGN_BOTTOM) == 0) {
-    if (vertical) {
-      align = DWRITE_TEXT_ALIGNMENT_TRAILING;
+    if (new_vertical) {
+      new_align = DWRITE_TEXT_ALIGNMENT_TRAILING;
     } else {
-      valign = DWRITE_PARAGRAPH_ALIGNMENT_FAR;
+      new_valign = DWRITE_PARAGRAPH_ALIGNMENT_FAR;
     }
   } else {
-    if (vertical) {
-      align = DWRITE_TEXT_ALIGNMENT_LEADING;
+    if (new_vertical) {
+      new_align = DWRITE_TEXT_ALIGNMENT_LEADING;
     } else {
-      valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
+      new_valign = DWRITE_PARAGRAPH_ALIGNMENT_NEAR;
     }
   }
 
   wstring new_face = to_wide(font_face);
 
-  if (new_face != face || face_size != font_size || new_bold != bold ||
-      new_italic != italic || new_underline != underline ||
-      new_strikeout != strikeout || vertical != new_vertical) {
+  if (wrap != new_extends_wrap || new_face != face || face_size != font_size ||
+      new_bold != bold || new_italic != italic || new_underline != underline ||
+      new_strikeout != strikeout || vertical != new_vertical ||
+      align != new_align || valign != new_valign) {
+    wrap = new_extends_wrap;
     face = new_face;
     face_size = font_size;
     bold = new_bold;
@@ -361,6 +351,9 @@ inline void TextSource::Update(obs_data_t *s) {
     strikeout = new_strikeout;
 
     vertical = new_vertical;
+
+    align = new_align;
+    valign = new_valign;
 
     UpdateFont();
   }
